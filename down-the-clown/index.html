@@ -657,7 +657,15 @@ let state = 'start', score = 0, timeLeft = CONFIG.round.seconds, hits = 0, rowsC
 const el = { score: $('#score b'), scoreBox: $('#score'), timer: $('#timer'), meter: $('#meter'), fill: $('#meter i'), pops: $('#pops'), flash: $('#flash'), hud: $('#hud') };
 const loadBest = () => { try { return Math.max(0, parseInt(localStorage.getItem('dtc.best') ?? '0', 10) || 0); } catch { return 0; } };
 const saveBest = (v) => { try { localStorage.setItem('dtc.best', String(v)); } catch { /* private mode: best score just won't persist */ } };
-function setScore(v) { score = v; el.score.textContent = v; el.scoreBox.classList.remove('bump'); void el.scoreBox.offsetWidth; el.scoreBox.classList.add('bump'); }
+// prize points saved from earlier rounds here (the carnival turns the total into a stuffed animal when you go back)
+let prizeBase = 0;
+try { const was = JSON.parse(localStorage.getItem('starlight.prizes.pending') || 'null'); if (was && was.g === 'clown') prizeBase = was.p || 0; } catch { /* none */ }
+const prizeEl = document.createElement('div');
+prizeEl.style.cssText = 'margin-top:6px;padding-top:6px;border-top:2px solid rgba(255,244,220,.25);font-size:9px;color:#ffe14a;line-height:1.5';
+prizeEl.innerHTML = 'PRIZE POINTS<br><span style="font-size:20px;color:#fff;text-shadow:2px 2px 0 #ff5fa2">0</span>';
+$('#score').appendChild(prizeEl);
+const showPrize = () => { prizeEl.lastChild.textContent = prizeBase + score; };
+function setScore(v) { score = v; el.score.textContent = v; showPrize(); el.scoreBox.classList.remove('bump'); void el.scoreBox.offsetWidth; el.scoreBox.classList.add('bump'); }
 function popup(html, x, y, z, big = false) {
   _p.set(x, y, z).project(camera);
   const d = document.createElement('div'); d.className = 'pop' + (big ? ' big' : ''); d.innerHTML = html;
@@ -693,6 +701,18 @@ function endRound() {
 }
 function showOver() {
   state = 'over';
+  // prize points: every round here adds up, and the carnival hands over a stuffed animal when you go back
+  // (the sizes must match GAME_PRIZES.clown.tiers in the carnival's src/prizes/plush.js)
+  try {
+    const KEY = 'starlight.prizes.pending', TIERS = [200, 500, 1100, 2200], NAMES = ['Small', 'Medium', 'Large', 'Jumbo'];
+    const was = JSON.parse(localStorage.getItem(KEY) || 'null'), total = (was && was.g === 'clown' ? was.p : 0) + score;
+    localStorage.setItem(KEY, JSON.stringify({ g: 'clown', p: total }));
+    prizeBase = total - score; // (so the box keeps showing the total until the next round starts, then carries on from it)
+    let note = $('#rPrize');
+    if (!note) { note = document.createElement('div'); note.id = 'rPrize'; note.style.cssText = 'margin:10px 0 2px;font-size:9px;line-height:1.7;color:#ffe14a;text-align:center'; $('#newbest').after(note); }
+    let s = -1; TIERS.forEach((t, i) => { if (total >= t) s = i; });
+    note.innerHTML = 'PRIZE POINTS: ' + total + '<br>' + (s >= 0 ? NAMES[s] + ' prize waiting at the carnival!' : (TIERS[0] - total) + ' more for a small prize') + (s < 3 ? '<br><span style="color:#fff4dc;opacity:.8">' + NAMES[s + 1] + ' prize at ' + TIERS[s + 1] + '</span>' : '');
+  } catch { /* storage unavailable: no prize this time */ }
   const best = loadBest(), isBest = score > best; if (isBest) saveBest(score);
   $('#rScore').textContent = score; $('#rHits').textContent = hits; $('#rRows').textContent = rowsCleared; $('#rBest').textContent = Math.max(best, score);
   $('#newbest').classList.toggle('on', isBest && score > 0);

@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Down the Clown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink:#241a40; --cream:#fff4dc; --gold:#ffcf5a; --red:#ff5a5a; --pink:#ff6fae; --teal:#39d0c4; --blue:#3f6fe0; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#1c1430; color:var(--cream);
+    font-family:'Press Start 2P', ui-monospace, monospace; overscroll-behavior:none; touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  canvas#game { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .panel { background:rgba(34,24,64,.88); border:3px solid var(--cream); box-shadow:0 0 0 3px var(--ink), 5px 5px 0 3px rgba(0,0,0,.35); }
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; padding:max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left)); }
+  .chip { position:absolute; top:max(12px, env(safe-area-inset-top)); padding:9px 12px 7px; font-size:16px; text-align:center; line-height:1.5; opacity:0; transform:translateY(-14px); transition:opacity .25s, transform .25s steps(4); }
+  .playing .chip, .chip.always { opacity:1; transform:none; }
+  .chip small { display:block; font-size:8px; color:var(--teal); }
+  #score { left:max(12px, env(safe-area-inset-left)); min-width:112px; border-color:var(--gold); }
+  #score b { color:var(--gold); font-weight:normal; }
+  #score.bump { animation:bump .18s steps(3); }
+  #timer { left:50%; margin-left:-44px; width:88px; font-size:22px; border-color:var(--teal); }
+  #timer.urgent { border-color:var(--red); color:var(--red); animation:urgent .5s steps(4) infinite; }
+  #btns { position:absolute; right:max(12px, env(safe-area-inset-right)); top:max(12px, env(safe-area-inset-top)); display:flex; gap:10px; pointer-events:auto; }
+  #btns button { font:inherit; font-size:9px; color:var(--cream); padding:10px 9px 8px; cursor:pointer; min-width:44px; min-height:40px; }
+  #btns button.off { color:#9a8fc0; }
+  #meter { position:absolute; right:max(18px, env(safe-area-inset-right)); top:50%; width:34px; height:44vh; max-height:320px; margin-top:-22vh; padding:3px; display:none; }
+  #meter.on { display:block; }
+  #meter i { position:absolute; left:3px; right:3px; bottom:3px; height:0; background:linear-gradient(to top, var(--teal), var(--gold) 60%, var(--red)); }
+  #meter u { position:absolute; left:-30px; width:26px; text-align:right; font-size:7px; text-decoration:none; color:var(--gold); transform:translateY(50%); }
+  #meter u::after { content:''; position:absolute; right:-10px; top:50%; width:8px; height:2px; background:var(--cream); }
+  #pops { position:fixed; inset:0; pointer-events:none; z-index:6; overflow:hidden; }
+  .pop { position:absolute; font-size:15px; color:var(--gold); text-shadow:2px 2px 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink), 2px 0 0 var(--ink); transform:translate(-50%,-50%); animation:pop .9s steps(12) forwards; white-space:nowrap; }
+  .pop.big { font-size:clamp(18px, 4.6vw, 34px); color:var(--pink); animation:popbig 1.5s steps(18) forwards; text-align:center; line-height:1.5; }
+  .pop.big small { display:block; font-size:.45em; color:var(--cream); }
+  #flash { position:fixed; left:0; right:0; top:34%; text-align:center; font-size:clamp(34px, 11vw, 110px); color:var(--gold); text-shadow:5px 5px 0 var(--pink), 10px 10px 0 var(--ink); pointer-events:none; z-index:6; opacity:0; }
+  #flash.on { animation:flash .9s steps(10) forwards; }
+  .screen { position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; flex-direction:column; gap:20px; padding:20px; text-align:center;
+    background:radial-gradient(ellipse at center, rgba(28,20,48,.2), rgba(28,20,48,.78)); }
+  .screen.on { display:flex; animation:fadein .3s steps(5); }
+  h1 { margin:0; font-size:clamp(22px, 7vw, 58px); line-height:1.25; color:var(--gold); text-shadow:4px 4px 0 var(--red), 8px 8px 0 var(--ink); letter-spacing:2px; font-weight:normal; }
+  h1 span { color:var(--cream); font-size:.5em; display:block; }
+  .how { font-size:clamp(8px, 2.2vw, 12px); line-height:2; max-width:560px; text-shadow:2px 2px 0 var(--ink); }
+  .btn { font:inherit; font-size:clamp(12px, 3.4vw, 18px); color:var(--ink); background:var(--gold); border:3px solid var(--cream); box-shadow:0 0 0 3px var(--ink), 5px 5px 0 3px rgba(0,0,0,.4); padding:16px 26px 13px; cursor:pointer; }
+  .btn:hover, .btn:focus-visible { transform:translateY(-2px); outline:none; background:#ffe08a; }
+  .btn.alt { background:var(--cream); font-size:clamp(9px, 2.4vw, 12px); padding:12px 16px 10px; }
+  #result { padding:18px 22px 14px; min-width:min(360px, 86vw); border-color:var(--gold); }
+  #result div { display:flex; justify-content:space-between; gap:18px; font-size:11px; padding:8px 0; border-bottom:2px dotted rgba(255,244,220,.25); }
+  #result div:first-child { font-size:18px; }
+  #result b { color:var(--gold); font-weight:normal; }
+  #newbest { display:none; margin-top:12px; font-size:12px; color:var(--pink); animation:blink .5s steps(2) infinite; }
+  #newbest.on { display:block; }
+  #loading { position:fixed; inset:0; display:grid; place-items:center; font-size:12px; background:#1c1430; z-index:20; text-align:center; line-height:2; padding:20px; }
+  @keyframes bump { 50% { transform:scale(1.12); } }
+  @keyframes urgent { 50% { transform:scale(1.14); filter:brightness(1.35); } }
+  @keyframes blink { 50% { color:var(--gold); } }
+  @keyframes pop { 0% { opacity:1; transform:translate(-50%,-50%) scale(.5); } 15% { transform:translate(-50%,-70%) scale(1.25); } 70% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-260%) scale(1); } }
+  @keyframes popbig { 0% { opacity:1; transform:translate(-50%,-50%) scale(.3); } 12% { transform:translate(-50%,-60%) scale(1.2); } 75% { opacity:1; transform:translate(-50%,-90%) scale(1); } 100% { opacity:0; transform:translate(-50%,-140%) scale(1); } }
+  @keyframes flash { 0% { opacity:1; transform:scale(2); } 25% { transform:scale(1); } 70% { opacity:1; } 100% { opacity:0; transform:scale(.8); } }
+  @keyframes fadein { 0% { opacity:0; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="score" class="chip panel"><small>SCORE</small><b>0</b></div>
+  <div id="timer" class="chip panel">30</div>
+  <div id="btns"><button id="qual" class="panel" title="Graphics quality">AUTO</button><button id="mute" class="panel" title="Sound on / off">SND</button></div>
+  <div id="meter" class="panel"><i></i></div>
+</div>
+<div id="pops"></div>
+<div id="flash"></div>
+<div id="start" class="screen">
+  <h1>DOWN THE CLOWN<span>30-second ball toss</span></h1>
+  <div class="how" id="how"></div>
+  <button class="btn" id="play">PLAY</button>
+  <button class="btn alt" id="back" style="display:none">BACK TO THE CARNIVAL</button>
+</div>
+<div id="over" class="screen">
+  <h1>TIME'S UP!</h1>
+  <div id="result" class="panel"><div><span>SCORE</span><b id="rScore">0</b></div><div><span>Clowns downed</span><b id="rHits">0</b></div><div><span>Rows cleared</span><b id="rRows">0</b></div><div><span>Best score</span><b id="rBest">0</b></div><p id="newbest">NEW BEST SCORE!</p></div>
+  <button class="btn" id="again">PLAY AGAIN</button>
+  <button class="btn alt" id="back2" style="display:none">BACK TO THE CARNIVAL</button>
+</div>
+<div id="loading">Setting up the booth...</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+
+// =====================================================================================================
+//  CONFIG — every tuning value lives here. Distances are in booth units (1 unit = 32 texels).
+// =====================================================================================================
+const CONFIG = {
+  round: {
+    seconds: 30,          // length of a round
+    urgentSeconds: 5,     // the timer goes red and ticks for the last N seconds
+    rowResetDelay: 1.2,   // seconds a cleared row stays down before popping back up
+    throwCooldown: 0.15,  // minimum seconds between throws
+  },
+  points: {
+    rows: [10, 25, 50],        // points per clown: bottom, middle, top
+    rowBonus: [50, 125, 250],  // bonus for clearing a whole row
+  },
+  physics: {
+    gravity: 14,          // pulls the ball down (units / s^2)
+    minSpeed: 8.0,        // launch speed of the weakest throw (power 0)
+    maxSpeed: 16.8,       // launch speed of the strongest throw (power 1)
+    minAngle: 38,         // launch elevation in degrees at power 0 ...
+    maxAngle: 46,         // ... and at power 1 (harder throws also go a little higher)
+    ballRadius: 0.19,
+    bounce: 0.35,         // how lively a ball is off wood, wall and netting
+    ballLife: 1.5,        // seconds a spent ball lingers before it vanishes
+  },
+  swipe: {                // touch swipe and mouse drag
+    fullLength: 0.5,      // drag length (fraction of screen height) that gives full power
+    fullSpeed: 2.4,       // release speed (screen heights per second) that counts as "full speed"
+    lengthWeight: 1.0,    // share of the power that comes from how far you drag ...
+    speedWeight: 0.0,     // ... and from how fast (0 = length only, so the aiming guide holds still while you hold; the two should add up to 1)
+    speedWindow: 0.12,    // seconds before release over which the speed is measured
+    minPixels: 24,        // shorter than this is a tap, not a throw
+    minPower: 0.05,       // weakest throw a real swipe can produce ...
+    startAboveCounter: true, // ... raised automatically so the shortest drag already lands just above the counter's gold rail
+                          //     (the aiming bullseye then starts at the top of the rail, never down on the counter itself)
+    maxPower: 0.92,       // strongest (a little past the top row, so even the hardest swipe needs control)
+    steerGain: 1.0,       // how strongly the swipe's left/right angle steers the ball
+    maxSteer: 26,         // steering limit in degrees
+    followFinger: true,   // the ball leaves the counter in line with where the swipe / drag started
+    originRange: 3.4,     // ... but never farther than this from the centre of the counter
+  },
+  preview: {              // the aiming guide shown while dragging (and while charging with the keyboard)
+    enabled: true,
+    dotEvery: 0.05,       // seconds of flight between dots of the arc
+    dotSize: 0.085,       // size of each dot
+    markSize: 0.5,        // size of the bullseye where the ball will land
+  },
+  keyboard: {
+    aimSpeed: 30,         // degrees per second the aim indicator moves
+    chargeTime: 0.95,     // seconds for the power meter to fill (it then swings down and up again)
+  },
+  layout: {
+    perRow: 5,
+    spacing: 1.5,         // distance between clowns in a row
+    // bottom row first: z = depth (more negative = farther), y = shelf height, scale = clown size
+    rows: [ { z: -1.0, y: 1.5, scale: 1.0 }, { z: -2.9, y: 2.8, scale: 0.94 }, { z: -4.8, y: 4.1, scale: 0.88 } ],
+    shelfLip: 0.35,       // how far the shelf sticks out in front of its clowns
+    halfWidth: 4.8,       // booth half-width (the side netting)
+    backZ: -6.5,          // back wall
+    origin: [0, 1.9, 6.2],// where the ball leaves the hand
+  },
+  clown: {
+    width: 1.0, height: 1.5,   // sprite size at scale 1 (32 x 48 texels)
+    hitWidth: 0.80,            // fraction of the sprite's width that counts as a hit
+    hitHeight: 0.94,           // fraction of its height
+    hitDepth: 0.3,             // how close (front-to-back) the ball must pass
+    forgive: {                 // extra room around a clown that still counts as a hit, in world units (0 = must touch the clown itself)
+      side: 0.12,              //   ... to the left and right
+      over: 0.16,              //   ... just over the top of the head
+      under: 0.08,             //   ... just under the feet (a ball clipping the shelf edge)
+      depth: 0.14,             //   ... dropping just in front of or just behind
+    },
+    fps: 10,                   // sprite animation rate (the game itself renders at 60)
+    tipTime: 0.26,             // seconds to fall over
+    riseTime: 0.34,            // seconds to pop back up
+  },
+  camera: { fov: 32, pos: [0, 2.5, 10.6], look: [0, 3.4, -2], viewHalfWidth: 4.7, maxFov: 74, portraitPullBack: 2.6, portraitValanceLift: 3.0 },
+  effects: {
+    bloom: { strength: 0.5, radius: 0.55, threshold: 0.86 },
+    dof: { focus: 13.5, nearStart: 4.5, nearEnd: 9.5, farStart: 4.5, farEnd: 30, maxBlur: 10 }, // maxBlur in px at 1080p
+    saturation: 1.2,
+    vignette: 0.12,
+    flicker: 0.06,        // strength of the marquee bulbs' flicker
+    shaft: 0.07,          // opacity of the light shaft
+    dust: 34,             // number of dust motes
+  },
+  quality: {              // post effects are the main cost; AUTO steps down this list if the frame rate is low
+    high: { pixelRatio: 2.0, dofTaps: 24, bloom: true, shadow: 2048 },
+    med:  { pixelRatio: 1.5, dofTaps: 12, bloom: true, shadow: 1024 },
+    low:  { pixelRatio: 1.0, dofTaps: 6,  bloom: false, shadow: 1024 },
+    autoMinFps: 42,       // AUTO drops a level when the average falls below this
+  },
+};
+// =====================================================================================================
+
+const $ = (s) => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const COARSE = matchMedia('(pointer: coarse)').matches;
+const L = CONFIG.layout, PH = CONFIG.physics;
+const HW = L.halfWidth, BACK = L.backZ;
+
+// ----------------------------------------------------------------------------------------- pixel art
+class Pix {
+  constructor(w, h) { this.w = w; this.h = h; this.d = new Uint8ClampedArray(w * h * 4); }
+  set(x, y, c) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; const i = (y * this.w + x) * 4; this.d[i] = (c >> 16) & 255; this.d[i + 1] = (c >> 8) & 255; this.d[i + 2] = c & 255; this.d[i + 3] = 255; }
+  clr(x, y) { if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.d[(y * this.w + x) * 4 + 3] = 0; }
+  has(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h && this.d[(y * this.w + x) * 4 + 3] > 0; }
+  rect(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c); }
+  ell(cx, cy, rx, ry, c) { for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy <= 1) this.set(x, y, c); } }
+  outline(c = 0x2a1846) { const o = []; for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) if (!this.has(x, y) && (this.has(x - 1, y) || this.has(x + 1, y) || this.has(x, y - 1) || this.has(x, y + 1))) o.push(x, y); for (let i = 0; i < o.length; i += 2) this.set(o[i], o[i + 1], c); return this; }
+  canvas() { const c = document.createElement('canvas'); c.width = this.w; c.height = this.h; c.getContext('2d').putImageData(new ImageData(this.d, this.w, this.h), 0, 0); return c; }
+}
+const shade = (c, f) => (clamp(((c >> 16) & 255) * f, 0, 255) << 16) | (clamp(((c >> 8) & 255) * f, 0, 255) << 8) | clamp((c & 255) * f, 0, 255);
+function toTex(canvas, repeat = true) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+const pixTex = (w, h, draw, repeat = true) => { const p = new Pix(w, h); draw(p); return toTex(p.canvas(), repeat); };
+let seed = 7; const rr = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+const C = { red: 0xe23d3d, cream: 0xfff1d6, blue: 0x3f6fe0, navy: 0x27317a, gold: 0xf2b632, teal: 0x2fb5b0, magenta: 0xe0489a, orange: 0xf2802e, purple: 0x7a4fc2, green: 0x56b870 };
+const PARTY = [C.red, C.gold, C.teal, C.magenta, C.blue, C.orange, C.cream];
+
+const T = {
+  stripes: pixTex(32, 32, (p) => { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const c = x < 16 ? C.red : C.cream; p.set(x, y, shade(c, x % 16 === 15 ? 0.84 : y % 16 === 15 ? 0.93 : rr() < 0.04 ? 1.06 : 1)); } }),
+  wood: pixTex(32, 32, (p) => { const tone = [1, 0.92, 1.05, 0.96]; for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, shade(0xb97c48, x % 8 === 0 ? 0.66 : (rr() < 0.07 ? 0.86 : 1) * tone[x >> 3])); }),
+  woodH: pixTex(32, 32, (p) => { const tone = [1, 0.9, 1.06, 0.95]; for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, shade(0xcf9456, y % 8 === 0 ? 0.68 : (rr() < 0.07 ? 0.88 : 1) * tone[y >> 3])); }),
+  floor: pixTex(32, 32, (p) => { const tone = [1, 0.88, 1.08, 0.94]; for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, shade(0x5a3d58, y % 8 === 0 ? 0.7 : (rr() < 0.06 ? 0.86 : 1) * tone[y >> 3])); }),
+  wall: pixTex(32, 32, (p) => { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const d = Math.abs(((x + 8) % 16) - 8) + Math.abs(((y + 8) % 16) - 8); p.set(x, y, d < 5 ? 0x3a4fb4 : d === 5 ? 0x4a62cc : rr() < 0.03 ? 0x32409a : 0x2b3790); } [[8, 8], [24, 24]].forEach(([x, y]) => { p.set(x, y, 0xffe08a); p.set(x - 1, y, C.gold); p.set(x + 1, y, C.gold); p.set(x, y - 1, C.gold); p.set(x, y + 1, C.gold); }); }),
+  blue: pixTex(32, 32, (p) => { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, shade(C.blue, y % 8 === 7 ? 0.8 : x % 16 === 0 ? 0.88 : rr() < 0.05 ? 1.08 : 1)); }),
+  gold: pixTex(32, 32, (p) => { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, shade(C.gold, y % 8 === 1 ? 1.2 : y % 8 === 7 ? 0.78 : 1)); }),
+  net: pixTex(16, 16, (p) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if ((x + y) % 8 === 0 || (x - y + 16) % 8 === 0) p.set(x, y, (x + y) % 16 === 0 ? 0xfff1d6 : 0xd9c8a8); }),
+  fringe: pixTex(32, 16, (p) => { for (let x = 0; x < 32; x++) { const lx = (x % 16) - 7.5, c = x < 16 ? C.red : C.cream, dep = 5 + Math.round(Math.sqrt(Math.max(0, 64 - lx * lx))); for (let y = 0; y < dep; y++) p.set(x, y, y === dep - 1 ? C.gold : shade(c, y < 2 ? 0.86 : 1)); } }),
+  sky: pixTex(1, 64, (p) => { const s = [0x191848, 0x231f66, 0x3a2a86, 0x5b3a9a, 0x8a4aa0, 0xc05a9a, 0xf07a8a, 0xffa878]; for (let y = 0; y < 64; y++) p.set(0, y, s[Math.min(7, Math.floor((y / 64) * 8))]); }, false),
+  shaft: pixTex(8, 1, (p) => { for (let x = 0; x < 8; x++) { const v = [40, 110, 190, 255, 255, 190, 110, 40][x]; p.set(x, 0, (v << 16) | (v << 8) | v); } }, false),
+  ball: pixTex(12, 12, (p) => { p.ell(5.5, 5.5, 4.6, 4.6, 0xfff6ea); for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) if (p.has(x, y) && x + y > 13) p.set(x, y, 0xd8cfe6); p.rect(3, 3, 2, 2, 0xffffff); [[7, 2], [8, 3], [8, 4], [7, 5], [3, 7], [4, 8], [5, 8], [6, 9]].forEach(([x, y]) => p.set(x, y, C.red)); p.outline(0x3a2456); }, false),
+  bullseye: pixTex(16, 16, (p) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if (d <= 7.2) p.set(x, y, d > 5.6 ? C.red : d > 3.6 ? 0xfff6ea : d > 1.6 ? C.red : 0xffe08a); } p.outline(0x2a1846); }, false),
+  arrow: pixTex(16, 32, (p) => { for (let y = 0; y < 10; y++) p.rect(8 - y * 0.8, y, Math.max(1, y * 1.6), 1, C.gold); for (let y = 12; y < 32; y += 6) p.rect(6, y, 4, 4, C.cream); p.outline(0x2a1846); }, false),
+};
+
+// The clowns: an original design — pom-pom party hat, big side tufts, ruffled collar, two-tone suit.
+// frame 0 / 1 = idle (arms down / arms up with a squashed bob), frame 2 = hit (crossed eyes, hat flying).
+function drawClown(p, v, frame) {
+  const hit = frame === 2, dy = frame === 1 ? 1 : 0, FACE = 0xfff4ec, DARK = 0x2a1846;
+  // stand
+  p.rect(5, 45, 22, 2, 0x7a4d2c); p.rect(8, 43, 16, 2, 0x9a6438);
+  // arms + gloves
+  const ay = frame === 1 ? 23 : hit ? 20 : 27;
+  p.rect(3, ay, 4, 10, v.suit2); p.rect(25, ay, 4, 10, v.suit); p.rect(3, hit || frame === 1 ? ay - 3 : ay + 10, 4, 3, FACE); p.rect(25, hit || frame === 1 ? ay - 3 : ay + 10, 4, 3, FACE);
+  // two-tone body with pom buttons
+  p.rect(7, 26, 9, 17, v.suit); p.rect(16, 26, 9, 17, v.suit2); p.rect(7, 41, 18, 2, shade(v.suit, 0.75));
+  for (let i = 0; i < 3; i++) { p.rect(15, 29 + i * 4, 2, 2, v.trim); p.set(15, 29 + i * 4, 0xffffff); }
+  // ruffled collar
+  for (let x = 6; x < 26; x++) { const s = (x % 4 < 2) ? 0 : 1; p.rect(x, 23 + dy + s, 1, 3, x % 4 < 2 ? 0xfffaf0 : v.trim); }
+  // hair tufts
+  p.ell(7.5, 14 + dy, 4.2, 4.6, v.hair); p.ell(23.5, 14 + dy, 4.2, 4.6, v.hair); p.rect(5, 11 + dy, 2, 2, shade(v.hair, 1.25)); p.rect(24, 11 + dy, 2, 2, shade(v.hair, 1.25));
+  // head
+  p.ell(15.5, 15 + dy, 7.4, 8, FACE); p.rect(20, 18 + dy, 2, 3, 0xf2dcd8);
+  // eyes
+  if (hit) { for (const ex of [11, 18]) { p.set(ex, 11, DARK); p.set(ex + 2, 11, DARK); p.set(ex + 1, 12, DARK); p.set(ex, 13, DARK); p.set(ex + 2, 13, DARK); } }
+  else { p.rect(12, 11 + dy, 2, 3, DARK); p.rect(18, 11 + dy, 2, 3, DARK); p.set(12, 9 + dy, v.trim); p.set(13, 9 + dy, v.trim); p.set(18, 9 + dy, v.trim); p.set(19, 9 + dy, v.trim); }
+  // cheeks, nose, mouth
+  p.rect(9, 16 + dy, 2, 2, 0xffa6b8); p.rect(21, 16 + dy, 2, 2, 0xffa6b8);
+  p.ell(15.5, 15.5 + dy, 2, 2, C.red); p.set(15, 14 + dy, 0xff9a9a);
+  if (hit) { p.ell(15.5, 20, 2.4, 1.8, DARK); p.rect(15, 20, 2, 1, 0xd8405a); }
+  else { p.rect(11, 19 + dy, 10, 1, 0xc8283a); p.set(10, 18 + dy, 0xc8283a); p.set(21, 18 + dy, 0xc8283a); p.rect(13, 20 + dy, 6, 1, 0xc8283a); }
+  // party hat with pom-pom (knocked askew when hit)
+  const hx = hit ? 4 : 0, hy = hit ? -3 : dy;
+  for (let i = 0; i < 6; i++) p.rect(15 - i * 0.5 + hx, 2 + i + hy, 2 + i, 1, i % 2 ? v.hat : v.trim);
+  p.rect(14 + hx, hy, 3, 3, 0xffffff);
+  p.outline(DARK);
+}
+const CLOWN_LOOKS = [
+  { suit: C.blue, suit2: 0x58c8e8, hair: C.orange, hat: C.red, trim: C.gold },
+  { suit: C.magenta, suit2: 0xffa0d0, hair: C.green, hat: C.teal, trim: C.cream },
+  { suit: C.gold, suit2: C.orange, hair: C.purple, hat: C.blue, trim: 0xff7ab0 },
+];
+
+// ----------------------------------------------------------------------------------------- renderer
+const canvas = $('#game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x231f66);
+scene.fog = new THREE.Fog(0x6a4aa0, 30, 120); // lavender dusk haze
+const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, 1, 0.5, 200);
+
+// materials (all lit, nearest-filtered, one texel density: 32 texels per unit)
+const lam = (map, o = {}) => new THREE.MeshLambertMaterial({ map, ...o });
+const cut = (map, o = {}) => { const m = new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, ...o }); m.shadowSide = THREE.DoubleSide; return m; };
+// "crisp" materials write alpha 0, which tells the depth-of-field pass to leave those pixels sharp (ball, aim arrow)
+const crisp = (m) => { m.onBeforeCompile = (s) => { s.fragmentShader = s.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = 0.0;'); }; return m; };
+const M = { stripes: lam(T.stripes), wood: lam(T.wood), woodH: lam(T.woodH), floor: lam(T.floor), wall: lam(T.wall), blue: lam(T.blue), gold: lam(T.gold, { emissive: 0x6a4a10 }), net: cut(T.net), fringe: cut(T.fringe) };
+
+function boxGeo(w, h, d) {
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const k = f * 4 + i; uv.setXY(k, uv.getX(k) * dims[f][0], uv.getY(k) * dims[f][1]); }
+  return g;
+}
+function box(mat, w, h, d, x, y, z, o = {}) { // (x, y, z) = centre of the bottom face
+  const m = new THREE.Mesh(boxGeo(w, h, d), mat); m.position.set(x, y + h / 2, z); m.castShadow = o.cast ?? true; m.receiveShadow = true; scene.add(m); return m;
+}
+function plane(mat, w, h, x, y, z, o = {}) {
+  const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv, k = o.texels ? 32 / o.texels : 1;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w * k, uv.getY(i) * h * k);
+  const m = new THREE.Mesh(g, mat); m.position.set(x, y, z); m.rotation.set(o.rx ?? 0, o.ry ?? 0, 0); m.castShadow = o.cast ?? false; m.receiveShadow = o.receive ?? true; scene.add(m); return m;
+}
+
+// ----------------------------------------------------------------------------------------- the booth
+const bulbs = []; // { x, y, z, color, size }
+const bulb = (x, y, z, color = 0xffe2b0, size = 0.16) => bulbs.push({ x, y, z, color, size });
+const edge = (i) => L.rows[i].z + L.shelfLip; // front edge of shelf i
+
+plane(M.floor, 90, 90, 0, 0, 0, { rx: -Math.PI / 2 });
+// stepped shelves (solid stairs), blue trim, gold lip and a row of bulbs on each
+L.rows.forEach((r, i) => {
+  const y0 = i ? L.rows[i - 1].y : 0, depth = edge(i) - BACK;
+  box(M.wood, HW * 2, r.y - y0, depth, 0, y0, BACK + depth / 2);
+  box(M.blue, HW * 2 + 0.06, 0.34, 0.08, 0, r.y - 0.4, edge(i) + 0.03);
+  box(M.gold, HW * 2 + 0.06, 0.07, 0.12, 0, r.y - 0.06, edge(i) + 0.04);
+  for (let k = 0; k <= 18; k++) bulb(-HW + 0.4 + (k * (HW * 2 - 0.8)) / 18, r.y - 0.23, edge(i) + 0.1, k % 2 ? PARTY[(i * 2 + 1) % 6] : 0xffe2b0, 0.13);
+});
+box(M.wall, HW * 2 + 0.6, 10.5, 0.3, 0, 0, BACK - 0.15);
+box(M.gold, HW * 2 + 0.2, 0.14, 0.1, 0, 7.55, BACK + 0.05);
+for (let k = 0; k <= 22; k++) bulb(-HW + 0.3 + (k * (HW * 2 - 0.6)) / 22, 7.82, BACK + 0.12, k % 2 ? C.magenta : 0xffe2b0);
+// side netting and posts
+for (const s of [-1, 1]) {
+  plane(M.net, 5 - BACK, 10.5, s * HW, 5.25, (5 + BACK) / 2, { ry: (s * Math.PI) / 2, texels: 16 });
+  box(M.blue, 0.3, 10.5, 0.3, s * (HW + 0.05), 0, 5);
+  box(M.blue, 0.3, 10.5, 0.3, s * (HW + 0.05), 0, BACK + 0.2);
+  box(M.wood, 0.14, 1.1, 5 - BACK, s * (HW + 0.02), 0, (5 + BACK) / 2);
+}
+// counter (out-of-focus foreground)
+box(M.wood, 15, 1.38, 2.5, 0, 0, 6.25);
+box(M.woodH, 15, 0.12, 2.7, 0, 1.38, 6.25);
+box(M.blue, 15, 0.2, 0.08, 0, 1.2, 4.96);
+box(M.gold, 15, 0.06, 0.1, 0, 1.5, 4.93);
+// striped canopy: front valance with a scalloped fringe and hanging bulbs (framing), plus the roof
+const valance = new THREE.Group(); scene.add(valance); // lifted on tall screens (see resize) so it frames the booth instead of hiding it
+valance.add(box(M.stripes, 15, 8, 0.2, 0, 4.55, 5.0, { cast: false }), plane(M.fringe, 15, 0.5, 0, 4.32, 5.12));
+const hang = []; // the bulbs hanging from the valance
+const roof = box(M.stripes, HW * 2 + 1.4, 0.12, 5 - BACK + 0.6, 0, 10.4, (5 + BACK) / 2, { cast: false });
+for (let k = 0; k <= 26; k++) { const x = -6.5 + k * 0.5; hang.push({ x, y: 4.36 - 0.1 * Math.sin((k % 4) * 0.785), z: 5.2, color: k % 3 === 0 ? C.magenta : k % 3 === 1 ? 0xffe2b0 : C.teal, size: 0.15 }); }
+
+// sign (pixel-font text thresholded to hard pixels)
+async function makeSign() {
+  try { await Promise.race([document.fonts.load('16px "Press Start 2P"'), new Promise((r) => setTimeout(r, 2500))]); } catch { /* fall back to a system font */ }
+  const text = 'DOWN THE CLOWN', tmp = document.createElement('canvas'), ctx = tmp.getContext('2d', { willReadFrequently: true });
+  const font = '16px "Press Start 2P", monospace'; ctx.font = font;
+  const tw = Math.ceil(ctx.measureText(text).width), w = tw + 16, h = 32;
+  tmp.width = w; tmp.height = h; ctx.font = font; ctx.textBaseline = 'top'; ctx.fillStyle = '#fff'; ctx.fillText(text, 8, 8);
+  const a = ctx.getImageData(0, 0, w, h).data, on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && a[(y * w + x) * 4 + 3] > 110;
+  const p = new Pix(w, h);
+  p.rect(0, 0, w, h, C.gold); p.rect(1, 1, w - 2, h - 2, shade(C.gold, 0.7)); p.rect(2, 2, w - 4, h - 4, 0x8a1f3a); p.rect(2, h - 4, w - 4, 2, 0x6a1830);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (on(x - 2, y - 2)) p.set(x, y, 0x3a1030);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (on(x, y)) p.set(x, y, y < 16 ? 0xffe9a0 : C.gold);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w / 32, h / 32), new THREE.MeshLambertMaterial({ map: toTex(p.canvas(), false), emissive: 0xffffff, emissiveMap: toTex(p.canvas(), false), emissiveIntensity: 0.3 }));
+  m.position.set(0, 6.75, BACK + 0.02); m.receiveShadow = true; scene.add(m);
+  for (let k = 0; k <= 12; k++) { bulb(-w / 64 + (k * w) / 32 / 12, 6.75 + h / 64 + 0.14, BACK + 0.1, k % 2 ? C.gold : 0xffe2b0, 0.13); bulb(-w / 64 + (k * w) / 32 / 12, 6.75 - h / 64 - 0.14, BACK + 0.1, k % 2 ? 0xffe2b0 : C.gold, 0.13); }
+}
+
+// dusk sky dome and far-off carnival lights (they melt into bokeh behind the netting)
+const sky = new THREE.Mesh(new THREE.SphereGeometry(110, 16, 12), new THREE.MeshBasicMaterial({ map: T.sky, side: THREE.BackSide, fog: false }));
+sky.position.y = -20; scene.add(sky);
+for (let i = 0; i < 40; i++) { const s = i % 2 ? 1 : -1, far = rnd(14, 34); bulb(s * (HW + 5 + rnd(0, 26)), rnd(1.5, 12), rnd(-22, 6) - (far - 14) * 0.2, PARTY[i % 7], rnd(0.18, 0.34)); }
+
+// soft light shaft slanting in from the top of the booth (additive, depth-tested, never written to depth)
+const shaftMat = new THREE.MeshBasicMaterial({ map: T.shaft, color: 0xffd9a0, transparent: true, opacity: CONFIG.effects.shaft, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+for (const [x, rz, ry] of [[-2.2, 0.38, 0.2], [1.6, 0.3, -0.25]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 11), shaftMat); m.position.set(x, 5.2, -1.5); m.rotation.set(0, ry, rz); m.renderOrder = 4; scene.add(m); }
+
+// lights: one soft warm key, a blue-violet fill so shadows go purple, and small coloured point lights
+scene.add(new THREE.HemisphereLight(0x8f86ff, 0x6a3a7a, 1.2));
+const key = new THREE.DirectionalLight(0xffd9b0, 1.75);
+key.position.set(-5, 9.5, 11); key.target.position.set(0, 3, -3);
+key.castShadow = true; Object.assign(key.shadow.camera, { left: -7, right: 7, top: 7, bottom: -5, near: 2, far: 34 });
+key.shadow.bias = -0.0008; key.shadow.normalBias = 0.02; key.shadow.radius = 3;
+scene.add(key, key.target);
+const pts = [];
+const point = (x, y, z, color, intensity, dist, flick = 1) => { const l = new THREE.PointLight(color, intensity, dist, 1.7); l.position.set(x, y, z); scene.add(l); pts.push({ l, base: intensity, ph: pts.length * 2.3, flick }); };
+point(0, 7.0, -2.2, 0xffb85a, 30, 13);            // warm marquee
+point(-4.5, 4.6, 1.2, 0x30e8d8, 15, 12, 0.5);     // teal accent
+point(4.5, 5.2, -1.6, 0xff4fb0, 17, 12, 0.5);     // magenta accent
+point(0, 3.7, 5.6, 0xffc080, 9, 8);               // glow from the hanging bulbs over the counter
+
+// ----------------------------------------------------------------------------------------- clowns
+const clowns = [], rows = [];
+const clownGeo = new THREE.PlaneGeometry(1, 1); clownGeo.translate(0, 0.5, 0); // origin at the base: the hinge
+L.rows.forEach((r, ri) => {
+  const mats = [0, 1].map((alt) => [0, 1, 2].map((f) => cut(pixTex(32, 48, (p) => drawClown(p, { ...CLOWN_LOOKS[ri], ...(alt ? { hat: CLOWN_LOOKS[ri].trim, trim: CLOWN_LOOKS[ri].hat } : {}) }, f), false), { emissive: 0xffffff, emissiveMap: null, emissiveIntensity: 0 })));
+  const row = { i: ri, clowns: [], resetT: 0 };
+  for (let k = 0; k < L.perRow; k++) {
+    const x = (k - (L.perRow - 1) / 2) * L.spacing;
+    const g = new THREE.Group(); g.position.set(x, r.y, r.z);
+    const m = new THREE.Mesh(clownGeo, mats[k % 2][0]); m.scale.set(CONFIG.clown.width * r.scale, CONFIG.clown.height * r.scale, 1);
+    m.castShadow = m.receiveShadow = true; g.add(m); scene.add(g);
+    const c = { row, k, x, baseY: r.y, z: r.z, hw: (CONFIG.clown.width * r.scale * CONFIG.clown.hitWidth) / 2, hh: CONFIG.clown.height * r.scale * CONFIG.clown.hitHeight, g, m, mats: mats[k % 2], state: 'up', t: 0, ph: rnd(0, 20) };
+    clowns.push(c); row.clowns.push(c);
+  }
+  rows.push(row);
+});
+const DOWN_ANGLE = -(Math.PI / 2 - 0.1);
+const outBounce = (k) => { const n = 7.5625, d = 2.75; return k < 1 / d ? n * k * k : k < 2 / d ? n * (k -= 1.5 / d) * k + 0.75 : k < 2.5 / d ? n * (k -= 2.25 / d) * k + 0.9375 : n * (k -= 2.625 / d) * k + 0.984375; };
+const outBack = (k) => 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2);
+function updateClowns(dt, time) {
+  const tick = Math.floor(time * CONFIG.clown.fps); // sprite animation runs on its own low-fps clock
+  for (const c of clowns) {
+    if (c.state === 'up') {
+      const f = tick + Math.floor(c.ph);
+      c.m.material = c.mats[(f >> 2) & 1];
+      c.g.rotation.set(0, 0, [0, 0.04, 0, -0.04][f & 3]);
+    } else if (c.state === 'down') {
+      c.t += dt; c.m.material = c.mats[2];
+      c.g.rotation.set(DOWN_ANGLE * outBounce(Math.min(1, c.t / CONFIG.clown.tipTime)), 0, 0);
+    } else { // rising
+      c.t += dt; const k = Math.min(1, c.t / CONFIG.clown.riseTime);
+      c.m.material = c.mats[1];
+      c.g.rotation.set(DOWN_ANGLE * (1 - outBack(k)), 0, 0);
+      if (k >= 1) c.state = 'up';
+    }
+  }
+  for (const row of rows) if (row.resetT > 0 && (row.resetT -= dt) <= 0) for (const c of row.clowns) { c.state = 'rising'; c.t = 0; sfx.pop(); }
+}
+function resetClowns() { for (const c of clowns) { c.state = 'up'; c.t = 0; c.g.rotation.set(0, 0, 0); } for (const r of rows) r.resetT = 0; }
+
+// ----------------------------------------------------------------------------------------- ball physics
+const R = PH.ballRadius;
+const heightAt = (z) => (z <= edge(2) ? L.rows[2].y : z <= edge(1) ? L.rows[1].y : z <= edge(0) ? L.rows[0].y : z >= 5 && z <= 7.5 ? 1.5 : 0);
+function launch(power, yawDeg, x0 = L.origin[0]) {
+  const p = clamp(power, 0, 1), v = lerp(PH.minSpeed, PH.maxSpeed, p), el = THREE.MathUtils.degToRad(lerp(PH.minAngle, PH.maxAngle, p)), yaw = THREE.MathUtils.degToRad(yawDeg);
+  return { x: x0, y: L.origin[1], z: L.origin[2], vx: v * Math.cos(el) * Math.sin(yaw), vy: v * Math.sin(el), vz: -v * Math.cos(el) * Math.cos(yaw), spent: false, life: 0, bounced: false };
+}
+// advances one ball by h seconds; returns the clown it knocked (if any). `all` = treat every clown as standing (used by the simulator)
+function stepBall(b, h, all = false) {
+  const pz = b.z, py = b.y;
+  b.vy -= PH.gravity * h; b.x += b.vx * h; b.y += b.vy * h; b.z += b.vz * h;
+  if (!b.spent) {
+    // a near miss still counts (CONFIG.clown.forgive); if the ball is within reach of two clowns, the nearer one goes down
+    const F = CONFIG.clown.forgive;
+    let best = null, bestD = 1e9;
+    for (const c of clowns) {
+      if ((!all && c.state !== 'up') || Math.abs(b.z - c.z) > CONFIG.clown.hitDepth + F.depth) continue;
+      const dx = Math.abs(b.x - c.x);
+      if (dx <= c.hw + R * 0.5 + F.side && b.y >= c.baseY - F.under && b.y <= c.baseY + c.hh + R * 0.5 + F.over && dx < bestD) { best = c; bestD = dx; }
+    }
+    if (best) {
+      b.spent = true; b.bounced = true; b.vz = Math.abs(b.vz) * 0.22; b.vx = b.vx * 0.3 + rnd(-0.6, 0.6); b.vy = Math.max(b.vy * 0.2, 1.2);
+      return best;
+    }
+  }
+  const H = heightAt(b.z);
+  if (b.y - R < H) {
+    if (heightAt(pz) < H && py - R < H - 0.02) { b.z = pz; b.vz = -b.vz * PH.bounce; }           // the front of a shelf
+    else { b.y = H + R; b.vy = Math.abs(b.vy) * PH.bounce; b.vx *= 0.7; b.vz *= 0.7; if (b.vy < 0.8) b.vy = 0; } // a shelf top / the floor
+    b.spent = b.bounced = true;
+  }
+  if (b.z - R < BACK) { b.z = BACK + R; b.vz = Math.abs(b.vz) * PH.bounce; b.spent = b.bounced = true; }            // back wall
+  if (b.z < 5 && Math.abs(b.x) + R > HW) { b.x = Math.sign(b.x) * (HW - R); b.vx = -b.vx * PH.bounce; b.spent = b.bounced = true; } // netting
+  if (b.y + R > 10.3) { b.y = 10.3 - R; b.vy = -Math.abs(b.vy) * PH.bounce; b.spent = true; }                       // canopy
+  return null;
+}
+// which clown would a throw hit if every clown were standing? (used for tuning and the power-meter marks)
+function simulate(power, yawDeg) { const b = launch(power, yawDeg); for (let i = 0; i < 480 && !b.spent; i++) { const c = stepBall(b, 1 / 120, true); if (c) return c; } return null; }
+
+const ballMat = crisp(new THREE.MeshLambertMaterial({ map: T.ball, alphaTest: 0.5, color: 0xd6d2de }));
+const ballGeo = new THREE.PlaneGeometry(0.375 * 1.1, 0.375 * 1.1), casterGeo = new THREE.SphereGeometry(R, 8, 6);
+const casterMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+const balls = [];
+function throwBall(power, yawDeg, x0) {
+  const b = launch(power, yawDeg, x0);
+  b.mesh = new THREE.Mesh(ballGeo, ballMat); b.caster = new THREE.Mesh(casterGeo, casterMat); b.caster.castShadow = true; b.spin = rnd(-1, 1);
+  scene.add(b.mesh, b.caster); balls.push(b); sfx.throw(power);
+  return b;
+}
+let acc = 0;
+function updateBalls(dt, time) {
+  acc = Math.min(acc + dt, 0.1);
+  while (acc >= 1 / 120) {
+    acc -= 1 / 120;
+    for (const b of balls) { const was = b.bounced; const c = stepBall(b, 1 / 120); if (c) onHit(c, b); else if (b.bounced && !was) sfx.thud(); }
+  }
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i];
+    if (b.spent) b.life += dt;
+    const k = b.life > PH.ballLife - 0.25 ? Math.max(0.01, (PH.ballLife - b.life) / 0.25) : 1;
+    b.mesh.position.set(b.x, b.y, b.z); b.caster.position.copy(b.mesh.position);
+    b.mesh.quaternion.copy(camera.quaternion); b.mesh.rotateZ(Math.floor(time * 12) * 0.7 * b.spin); // chunky 12 fps spin
+    b.mesh.scale.setScalar(k);
+    if (b.life >= PH.ballLife || b.y < -2 || b.z > 12) { scene.remove(b.mesh, b.caster); balls.splice(i, 1); }
+  }
+}
+function clearBalls() { for (const b of balls) scene.remove(b.mesh, b.caster); balls.length = 0; }
+
+// ----------------------------------------------------------------------------------------- particles (pixel squares)
+const PMAX = 420, pm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), PMAX);
+pm.frustumCulled = false; pm.renderOrder = 3; scene.add(pm);
+const parts = [], _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _zAxis = new THREE.Vector3(0, 0, 1), _col = new THREE.Color();
+for (let i = 0; i < PMAX; i++) { parts.push({ life: 0 }); pm.setMatrixAt(i, _m4.makeScale(0, 0, 0)); pm.setColorAt(i, _col.set(0xffffff)); }
+const DUST = CONFIG.effects.dust, POOL = PMAX - DUST; let pNext = 0;
+const dust = Array.from({ length: DUST }, (_, i) => { pm.setColorAt(POOL + i, _col.setRGB(1.9, 1.5, 0.95)); return { x: rnd(-4.5, 4.5), y: rnd(1, 8), z: rnd(-6, 4.5), vx: rnd(-0.12, 0.12), vy: rnd(0.03, 0.12), ph: rnd(0, 6) }; });
+function emit(x, y, z, o) {
+  const i = pNext; pNext = (pNext + 1) % POOL; const p = parts[i];
+  Object.assign(p, { x, y, z, vx: o.vx ?? 0, vy: o.vy ?? 0, vz: o.vz ?? 0, g: o.g ?? 12, life: o.life ?? 0.6, max: o.life ?? 0.6, size: (o.px ?? 3) / 32, rot: rnd(0, 3), spin: rnd(-9, 9) });
+  _col.set(o.color ?? 0xffffff); if (o.hot) _col.multiplyScalar(o.hot); pm.setColorAt(i, _col); pm.instanceColor.needsUpdate = true;
+}
+function puff(x, y, z) { for (let i = 0; i < 12; i++) { const a = rnd(0, 6.28), sp = rnd(1, 4); emit(x + rnd(-0.1, 0.1), y + rnd(-0.1, 0.1), z + 0.15, { vx: Math.cos(a) * sp, vy: Math.sin(a) * sp + 1, vz: rnd(0.3, 1.5), g: 7, life: rnd(0.3, 0.55), px: i % 2 ? 3 : 4, color: i % 3 ? 0xfff4e0 : 0xffd98a }); } }
+function confetti(row) { const r = L.rows[row.i]; for (let i = 0; i < 90; i++) emit(rnd(-3.6, 3.6), r.y + rnd(0.3, 1.6), r.z + 0.3, { vx: rnd(-2.5, 2.5), vy: rnd(3, 8.5), vz: rnd(0.2, 2.2), g: 9, life: rnd(0.9, 1.7), px: i % 2 ? 4 : 3, color: PARTY[i % 7], hot: i % 5 === 0 ? 2.4 : 1 }); }
+function updateParticles(dt, time) {
+  for (let i = 0; i < POOL; i++) {
+    const p = parts[i]; if (p.life <= 0) continue;
+    if ((p.life -= dt) <= 0) { pm.setMatrixAt(i, _m4.makeScale(0, 0, 0)); continue; }
+    p.vy -= p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.rot += p.spin * dt;
+    const k = p.life / p.max, s = p.size * (k < 0.25 ? k * 4 : 1);
+    pm.setMatrixAt(i, _m4.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_zAxis, Math.floor(p.rot * 3) / 3), _s.set(s, s, s)));
+  }
+  dust.forEach((d, i) => {
+    d.x += (d.vx + Math.sin(time * 0.6 + d.ph) * 0.08) * dt; d.y += d.vy * dt; if (d.y > 8) d.y = 1; if (Math.abs(d.x) > 4.5) d.x *= -0.98;
+    const s = 0.065 * (0.55 + 0.45 * Math.sin(time * 2.1 + d.ph * 3));
+    pm.setMatrixAt(POOL + i, _m4.compose(_p.set(d.x, d.y, d.z), _q.identity(), _s.set(s, s, s)));
+  });
+  pm.instanceMatrix.needsUpdate = true;
+}
+
+// ----------------------------------------------------------------------------------------- post-processing
+const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+class TiltShiftPass extends Pass { // depth-based tilt-shift: sharp band on the shelves, blurred foreground and distance
+  constructor(cam) {
+    super(); this.cam = cam; this.taps = 0;
+    const D = CONFIG.effects.dof;
+    this.uniforms = { tDiffuse: { value: null }, tDepth: { value: null }, res: { value: new THREE.Vector2(1, 1) }, near: { value: 1 }, far: { value: 100 }, focus: { value: D.focus }, ranges: { value: new THREE.Vector4(D.nearStart, D.nearEnd, D.farStart, D.farEnd) }, maxBlur: { value: D.maxBlur } };
+    this.fsQuad = new FullScreenQuad(null); this.setTaps(24);
+  }
+  setTaps(n) {
+    if (n === this.taps) return; this.taps = n; if (this.fsQuad.material) this.fsQuad.material.dispose();
+    this.fsQuad.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, depthTest: false, depthWrite: false, defines: { TAPS: n }, fragmentShader: `
+      varying vec2 vUv; uniform sampler2D tDiffuse, tDepth; uniform vec2 res; uniform float near, far, focus, maxBlur; uniform vec4 ranges;
+      float viewZ(vec2 uv){ float z = textureLod(tDepth, uv, 0.0).x * 2.0 - 1.0; return 2.0 * near * far / (far + near - z * (far - near)); }
+      float nearCoc(float z){ return smoothstep(ranges.x, ranges.y, focus - z); }
+      float coc(vec2 uv){ float z = viewZ(uv); return max(nearCoc(z), smoothstep(ranges.z, ranges.w, z - focus)); }
+      void main(){
+        vec4 c = textureLod(tDiffuse, vUv, 0.0);
+        if (c.a < 0.5) { gl_FragColor = vec4(c.rgb, 1.0); return; }        // "crisp" pixels (the ball) are never blurred
+        float ce = coc(vUv);
+        #if TAPS > 8
+        float cn = 0.0;                                                     // let the blurry foreground bleed over sharp pixels behind it
+        for (int i = 0; i < 6; i++) { float a = float(i) * 1.0472; cn = max(cn, nearCoc(viewZ(vUv + vec2(cos(a), sin(a)) * maxBlur * 0.6 / res))); }
+        ce = max(ce, cn * 0.9);
+        #endif
+        if (ce < 0.03) { gl_FragColor = vec4(c.rgb, 1.0); return; }
+        float rad = ce * maxBlur; vec3 acc = c.rgb; float wsum = 1.0;
+        for (int i = 1; i <= TAPS; i++) {
+          float fi = float(i), r = sqrt(fi / float(TAPS)) * rad;
+          vec2 uv = vUv + vec2(cos(fi * 2.39996), sin(fi * 2.39996)) * r / res;
+          vec4 s = textureLod(tDiffuse, uv, 0.0);
+          float w = clamp((s.a < 0.5 ? 0.0 : coc(uv) * maxBlur) - r + 1.5, 0.0, 1.0);
+          w *= 1.0 + dot(s.rgb, vec3(0.3333)) * 0.6;                        // brighter samples win: bokeh
+          acc += s.rgb * w; wsum += w;
+        }
+        gl_FragColor = vec4(acc / wsum, 1.0);
+      }` });
+  }
+  setSize(w, h) { this.uniforms.res.value.set(w, h); this.uniforms.maxBlur.value = (h / 1080) * CONFIG.effects.dof.maxBlur * (h > w ? 0.7 : 1); }
+  render(renderer, writeBuffer, readBuffer) {
+    const u = this.uniforms; u.tDiffuse.value = readBuffer.texture; u.tDepth.value = readBuffer.depthTexture; u.near.value = this.cam.near; u.far.value = this.cam.far;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); this.fsQuad.render(renderer);
+  }
+}
+const Grade = { uniforms: { tDiffuse: { value: null }, sat: { value: CONFIG.effects.saturation }, vig: { value: CONFIG.effects.vignette } }, vertexShader: VERT, fragmentShader: `
+  varying vec2 vUv; uniform sampler2D tDiffuse; uniform float sat, vig;
+  void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = mix(vec3(l), c, sat);
+    c += vec3(0.03, 0.012, 0.075) * (1.0 - smoothstep(0.0, 0.5, l));       // lift shadows toward blue-purple, never black
+    vec2 d = vUv - 0.5; c *= 1.0 - vig * smoothstep(0.3, 0.9, dot(d, d) * 2.0);
+    gl_FragColor = vec4(max(c, 0.0), 1.0); }` };
+const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: COARSE ? 0 : 4, depthTexture: new THREE.DepthTexture(4, 4) });
+const composer = new EffectComposer(renderer, rt);
+composer.renderTarget2.depthTexture = new THREE.DepthTexture(4, 4); // its own depth texture: a cloned one shares GPU storage and causes a feedback loop without MSAA
+composer.addPass(new RenderPass(scene, camera));
+const dof = new TiltShiftPass(camera); composer.addPass(dof);
+const B = CONFIG.effects.bloom, bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), B.strength, B.radius, B.threshold); composer.addPass(bloom);
+composer.addPass(new ShaderPass(Grade));
+composer.addPass(new OutputPass());
+
+// quality: AUTO starts high on desktop / medium on phones and steps down if the frame rate is low
+const QLEVELS = ['high', 'med', 'low'];
+let qMode = 'auto', qLevel = COARSE ? 'med' : 'high';
+try { const s = localStorage.getItem('dtc.quality'); if (s && (s === 'auto' || QLEVELS.includes(s))) { qMode = s; if (s !== 'auto') qLevel = s; } } catch { /* storage unavailable */ }
+function applyQuality() {
+  const q = CONFIG.quality[qLevel];
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio)); composer.setPixelRatio(renderer.getPixelRatio());
+  dof.setTaps(q.dofTaps); bloom.enabled = q.bloom;
+  if (key.shadow.mapSize.x !== q.shadow) { key.shadow.mapSize.set(q.shadow, q.shadow); if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; } }
+  $('#qual').textContent = qMode === 'auto' ? 'AUTO' : qLevel.toUpperCase();
+  resize();
+}
+$('#qual').addEventListener('click', () => {
+  const order = ['auto', ...QLEVELS]; qMode = order[(order.indexOf(qMode) + 1) % order.length];
+  qLevel = qMode === 'auto' ? (COARSE ? 'med' : 'high') : qMode; slowT = 0;
+  try { localStorage.setItem('dtc.quality', qMode); } catch { /* ignore */ }
+  applyQuality();
+});
+
+// camera + resize: a narrow lens in landscape; in portrait it pulls back and widens just enough to keep all five clowns in view
+const _look = new THREE.Vector3(...CONFIG.camera.look);
+function resize() {
+  const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight), aspect = w / h, cc = CONFIG.camera;
+  const z = cc.pos[2] + clamp((1.1 - aspect) * 3.2, 0, cc.portraitPullBack);
+  camera.position.set(cc.pos[0], cc.pos[1], z);
+  valance.position.y = clamp((1.1 - aspect) * 5, 0, cc.portraitValanceLift);
+  camera.aspect = aspect;
+  camera.fov = clamp(2 * THREE.MathUtils.radToDeg(Math.atan(cc.viewHalfWidth / ((z - L.rows[0].z) * aspect))), cc.fov, cc.maxFov);
+  camera.updateProjectionMatrix(); camera.lookAt(_look); camera.updateMatrixWorld();
+  dof.uniforms.focus.value = CONFIG.effects.dof.focus + (z - cc.pos[2]);
+  renderer.setSize(w, h, false); composer.setSize(w, h);
+  calcMinSwipePower();
+}
+addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+// ----------------------------------------------------------------------------------------- sound (Web Audio, starts on first interaction)
+let actx = null, master = null, noiseBuf = null, muted = false;
+try { muted = localStorage.getItem('dtc.muted') === '1'; } catch { /* ignore */ }
+function audioOn() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+    actx = new AC(); master = actx.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(actx.destination);
+    noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return true;
+}
+function tone(type, f0, f1, dur, vol = 0.25, delay = 0) { if (!actx) return; const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.02); }
+function noise(kind, f0, f1, dur, vol = 0.25) { if (!actx) return; const t = actx.currentTime, s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain(); s.buffer = noiseBuf; f.type = kind; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); s.connect(f).connect(g).connect(master); s.start(t, Math.random() * 0.4, dur + 0.02); }
+const sfx = {
+  throw: (p) => noise('bandpass', 500 + p * 500, 1800 + p * 1400, 0.16, 0.22),
+  hit: (row) => { noise('lowpass', 1200, 300, 0.09, 0.4); tone('triangle', 300 + row * 90, 130 + row * 40, 0.14, 0.35); tone('square', 620 + row * 160, 620 + row * 160, 0.07, 0.1, 0.03); },
+  thud: () => noise('lowpass', 420, 180, 0.07, 0.16),
+  pop: () => tone('sine', 380, 760, 0.07, 0.07),
+  bonus: (row) => [523, 659, 784, 1047, 1319].forEach((f, i) => tone('square', f * (1 + row * 0.12), f * (1 + row * 0.12), i === 4 ? 0.4 : 0.11, 0.14, i * 0.085)),
+  tick: () => tone('square', 1100, 1100, 0.045, 0.14),
+  go: () => { tone('square', 660, 660, 0.1, 0.14); tone('square', 990, 990, 0.25, 0.14, 0.1); },
+  buzzer: () => { tone('sawtooth', 160, 148, 0.7, 0.24); tone('square', 163, 151, 0.7, 0.1); },
+};
+function setMute(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5; $('#mute').classList.toggle('off', m); $('#mute').textContent = m ? 'MUTE' : 'SND'; try { localStorage.setItem('dtc.muted', m ? '1' : '0'); } catch { /* ignore */ } }
+$('#mute').addEventListener('click', () => { audioOn(); setMute(!muted); });
+setMute(muted);
+
+// ----------------------------------------------------------------------------------------- game state
+let state = 'start', score = 0, timeLeft = CONFIG.round.seconds, hits = 0, rowsCleared = 0, lastTick = 0, cooldown = 0, overT = 0;
+const el = { score: $('#score b'), scoreBox: $('#score'), timer: $('#timer'), meter: $('#meter'), fill: $('#meter i'), pops: $('#pops'), flash: $('#flash'), hud: $('#hud') };
+const loadBest = () => { try { return Math.max(0, parseInt(localStorage.getItem('dtc.best') ?? '0', 10) || 0); } catch { return 0; } };
+const saveBest = (v) => { try { localStorage.setItem('dtc.best', String(v)); } catch { /* private mode: best score just won't persist */ } };
+function setScore(v) { score = v; el.score.textContent = v; el.scoreBox.classList.remove('bump'); void el.scoreBox.offsetWidth; el.scoreBox.classList.add('bump'); }
+function popup(html, x, y, z, big = false) {
+  _p.set(x, y, z).project(camera);
+  const d = document.createElement('div'); d.className = 'pop' + (big ? ' big' : ''); d.innerHTML = html;
+  d.style.left = clamp((_p.x * 0.5 + 0.5) * 100, 8, 92) + '%'; d.style.top = clamp((-_p.y * 0.5 + 0.5) * 100, 10, 90) + '%';
+  el.pops.appendChild(d); d.addEventListener('animationend', () => d.remove());
+}
+function flash(text) { el.flash.textContent = text; el.flash.classList.remove('on'); void el.flash.offsetWidth; el.flash.classList.add('on'); }
+
+function onHit(c, b) {
+  if (c.state !== 'up') return;                    // only a standing clown can be knocked down (never double-counts)
+  c.state = 'down'; c.t = 0;
+  puff(b.x, b.y, c.z); sfx.hit(c.row.i);
+  if (state !== 'play') return;                    // balls still in the air after the buzzer don't score
+  const pts = CONFIG.points.rows[c.row.i];
+  hits++; setScore(score + pts); popup('+' + pts, c.x, c.baseY + c.hh * 0.8, c.z);
+  if (c.row.clowns.every((k) => k.state === 'down') && c.row.resetT <= 0) {   // the whole row is down
+    const bonus = CONFIG.points.rowBonus[c.row.i];
+    rowsCleared++; setScore(score + bonus); c.row.resetT = CONFIG.round.rowResetDelay;
+    confetti(c.row); sfx.bonus(c.row.i);
+    popup('ROW CLEAR!<small>+' + bonus + ' BONUS</small>', 0, c.baseY + 1.2, c.z, true);
+  }
+}
+function startRound() {
+  audioOn(); clearBalls(); resetClowns();
+  state = 'play'; timeLeft = CONFIG.round.seconds; hits = 0; rowsCleared = 0; lastTick = 0; cooldown = 0.25; charging = false;
+  setScore(0); el.timer.textContent = CONFIG.round.seconds; el.timer.classList.remove('urgent');
+  $('#start').classList.remove('on'); $('#over').classList.remove('on'); el.hud.classList.add('playing');
+  flash('GO!'); sfx.go();
+}
+function endRound() {
+  state = 'ending'; overT = 1.1; charging = false; el.meter.classList.remove('on'); el.timer.classList.remove('urgent'); el.timer.textContent = '0';
+  flash('TIME!'); sfx.buzzer();
+}
+function showOver() {
+  state = 'over';
+  const best = loadBest(), isBest = score > best; if (isBest) saveBest(score);
+  $('#rScore').textContent = score; $('#rHits').textContent = hits; $('#rRows').textContent = rowsCleared; $('#rBest').textContent = Math.max(best, score);
+  $('#newbest').classList.toggle('on', isBest && score > 0);
+  el.hud.classList.remove('playing'); $('#over').classList.add('on'); shownAt = performance.now();
+  if (isBest && score > 0) { sfx.bonus(1); for (const r of rows) confetti(r); }
+}
+let shownAt = 0;
+const guard = (fn) => () => { if (performance.now() - shownAt > 500) fn(); }; // ignore taps left over from the round
+$('#play').addEventListener('click', startRound);
+$('#again').addEventListener('click', guard(startRound));
+
+// ----------------------------------------------------------------------------------------- throwing: swipe / drag
+let swipe = null;
+function tryThrow(power, yaw, x0) { if (state !== 'play' || cooldown > 0) return false; cooldown = CONFIG.round.throwCooldown; throwBall(power, yaw, x0); return true; }
+// where a screen point sits on the counter, left to right: follow the line of sight out to the depth the ball is thrown from
+function counterX(clientX, clientY) {
+  _p.set((clientX / Math.max(1, window.innerWidth)) * 2 - 1, -(clientY / Math.max(1, window.innerHeight)) * 2 + 1, 0.5).unproject(camera).sub(camera.position);
+  return clamp(camera.position.x + (_p.x * (L.origin[2] - camera.position.z)) / _p.z, -CONFIG.swipe.originRange, CONFIG.swipe.originRange);
+}
+canvas.addEventListener('pointerdown', (e) => {
+  if (state !== 'play' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault(); try { canvas.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+  swipe = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, pts: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
+  setKeyboardMode(false);
+});
+canvas.addEventListener('pointermove', (e) => { if (!swipe || e.pointerId !== swipe.id) return; e.preventDefault(); swipe.x = e.clientX; swipe.y = e.clientY; swipe.pts.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (swipe.pts.length > 40) swipe.pts.shift(); });
+// The weakest swipe throw. With startAboveCounter it is the smallest power whose landing spot shows above the far
+// edge of the counter (its gold rail) from the current camera, so it is recalculated whenever the view changes.
+let minSwipePower = CONFIG.swipe.minPower;
+function calcMinSwipePower() {
+  const S = CONFIG.swipe; minSwipePower = S.minPower;
+  if (!S.startAboveCounter) return;
+  const railY = _p.set(0, 1.56, 4.93).project(camera).y + 0.02; // top of the rail on screen, plus a small margin
+  for (let pw = S.minPower; pw < 0.4; pw += 0.005) {
+    const b = launch(pw, 0); for (let i = 0; i < 600 && !b.spent; i++) stepBall(b, 1 / 120, true);
+    if (_p.set(b.x, b.y, b.z).project(camera).y >= railY) { minSwipePower = pw; return; }
+  }
+}
+// the throw a swipe would produce if it were released at (x, y) right now — or null if it is not (yet) a throw
+function swipeThrow(sw, x, y, now) {
+  const S = CONFIG.swipe, up = sw.y0 - y, dx = x - sw.x0;
+  if (up < S.minPixels) return null;                                   // a tap or a downward drag: not a throw
+  const ref = clamp(window.innerHeight, 320, 820);                     // "screen height", capped so big monitors don't need huge drags
+  const length = Math.hypot(dx, up) / ref / S.fullLength;
+  let a = sw.pts[0]; for (const q of sw.pts) if (now - q.t <= S.speedWindow * 1000) { a = q; break; }  // speed over the last moments
+  const dtS = Math.max(0.016, (now - a.t) / 1000), speed = Math.max(0, a.y - y) / ref / dtS / S.fullSpeed;
+  return {
+    power: lerp(minSwipePower, S.maxPower, clamp(S.lengthWeight * Math.min(1, length) + S.speedWeight * Math.min(1, speed), 0, 1)),
+    yaw: clamp(THREE.MathUtils.radToDeg(Math.atan2(dx, up)) * S.steerGain, -S.maxSteer, S.maxSteer),
+    x0: S.followFinger ? counterX(sw.x0, sw.y0) : L.origin[0],
+  };
+}
+function endSwipe(e) {
+  if (!swipe || e.pointerId !== swipe.id) return;
+  const t = swipeThrow(swipe, e.clientX, e.clientY, performance.now()); swipe = null;
+  if (t) tryThrow(t.power, t.yaw, t.x0);
+}
+canvas.addEventListener('pointerup', endSwipe);
+canvas.addEventListener('pointercancel', () => (swipe = null));
+// no scrolling, zooming or pull-to-refresh while playing
+for (const ev of ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'dblclick', 'contextmenu']) document.addEventListener(ev, (e) => { if (!e.target.closest || !e.target.closest('button')) e.preventDefault(); }, { passive: false });
+
+// ----------------------------------------------------------------------------------------- throwing: keyboard
+const keys = new Set(); let aimYaw = 0, charging = false, chargeT = 0, kbMode = false;
+const arrow = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.0), crisp(new THREE.MeshBasicMaterial({ map: T.arrow, alphaTest: 0.5, side: THREE.DoubleSide })));
+arrow.geometry.rotateX(-Math.PI / 2); arrow.geometry.translate(0, 0, -0.75); // lies flat on the counter, pointing into the booth
+arrow.position.set(L.origin[0], 1.53, L.origin[2] - 0.2); arrow.visible = false; scene.add(arrow);
+function setKeyboardMode(on) { kbMode = on; arrow.visible = on && state === 'play'; }
+// fills 0 -> 1, then swings 1 -> 0 -> 1 ... (a triangle wave) for as long as the key is held
+const meterPower = (t) => { const k = t / CONFIG.keyboard.chargeTime; if (k <= 1) return k; const m = (k - 1) % 2; return m < 1 ? 1 - m : m - 1; };
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if ([' ', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+  if (state === 'start' && (k === 'enter' || k === ' ') && !e.repeat) return startRound();
+  if (state === 'over' && (k === 'enter' || k === ' ') && !e.repeat) return guard(startRound)();
+  if (state !== 'play') return;
+  keys.add(k);
+  if (['arrowleft', 'arrowright', 'a', 'd', ' '].includes(k)) setKeyboardMode(true);
+  if (k === ' ' && !e.repeat && !charging) { charging = true; chargeT = 0; el.meter.classList.add('on'); }
+});
+addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase(); keys.delete(k);
+  if (k === ' ' && charging) { charging = false; el.meter.classList.remove('on'); tryThrow(meterPower(chargeT), aimYaw); }
+});
+addEventListener('blur', () => { keys.clear(); charging = false; el.meter.classList.remove('on'); });
+function updateKeyboard(dt) {
+  const dir = (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0);
+  aimYaw = clamp(aimYaw + dir * CONFIG.keyboard.aimSpeed * dt, -CONFIG.swipe.maxSteer, CONFIG.swipe.maxSteer);
+  arrow.visible = kbMode && state === 'play'; arrow.rotation.y = -THREE.MathUtils.degToRad(aimYaw);
+  if (charging) { chargeT += dt; el.fill.style.height = (meterPower(chargeT) * 100).toFixed(1) + '%'; }
+}
+// marks on the power meter showing roughly where each row sits (worked out by simulating straight throws)
+function meterMarks() {
+  const sum = [0, 0, 0], n = [0, 0, 0];
+  for (let p = 0; p <= 1.0001; p += 0.01) { const c = simulate(p, 0); if (c) { sum[c.row.i] += p; n[c.row.i]++; } }
+  [...el.meter.querySelectorAll('u')].forEach((u) => u.remove());
+  sum.forEach((s, i) => { if (!n[i]) return; const u = document.createElement('u'); u.textContent = CONFIG.points.rows[i]; u.style.bottom = ((s / n[i]) * 100).toFixed(1) + '%'; el.meter.appendChild(u); });
+}
+
+// ----------------------------------------------------------------------------------------- aiming guide
+// While dragging (or charging with the keyboard): the ball waits at the launch spot, a dotted arc shows its
+// flight and a small bullseye marks where it will land. All three are "crisp", so the tilt-shift never blurs them.
+const NDOTS = 40;
+const dots = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), crisp(new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4dc).multiplyScalar(1.25) })), NDOTS);
+dots.frustumCulled = false; dots.renderOrder = 7; dots.count = 0; scene.add(dots);
+const mark = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), crisp(new THREE.MeshBasicMaterial({ map: T.bullseye, alphaTest: 0.5, depthTest: false })));
+mark.renderOrder = 9; mark.visible = false; scene.add(mark);
+const held = new THREE.Mesh(ballGeo, ballMat); held.visible = false; scene.add(held);
+function showPreview(power, yaw, x0) {
+  const PV = CONFIG.preview, b = launch(power, yaw, x0), every = Math.max(1, Math.round(PV.dotEvery * 120));
+  held.visible = true; held.position.set(b.x, b.y, b.z); held.quaternion.copy(camera.quaternion);
+  let n = 0, hit = null;
+  for (let i = 1; i <= 600 && !b.spent; i++) {
+    hit = stepBall(b, 1 / 120);                 // same physics as a real throw, standing clowns included
+    if (!b.spent && i % every === 0 && n < NDOTS) dots.setMatrixAt(n++, _m4.compose(_p.set(b.x, b.y, b.z), camera.quaternion, _s.setScalar(PV.dotSize)));
+  }
+  dots.count = n; dots.instanceMatrix.needsUpdate = true;
+  // the bullseye sits where the ball first touches something (on the clown, if it will hit one), nudged toward the camera
+  mark.visible = true; mark.quaternion.copy(camera.quaternion);
+  const pulse = 1 + 0.12 * (Math.floor(time * 8) % 2);  // chunky 8 fps pulse
+  mark.scale.setScalar(PV.markSize * pulse * (hit ? 1.25 : 1));
+  if (hit) mark.position.set(hit.x, hit.baseY + hit.hh * 0.55, hit.z + 0.2); else mark.position.set(b.x, b.y, b.z + 0.15);
+}
+function hidePreview() { dots.count = 0; mark.visible = false; held.visible = false; }
+function updatePreview() {
+  if (!CONFIG.preview.enabled || state !== 'play') return hidePreview();
+  if (swipe) { const t = swipeThrow(swipe, swipe.x, swipe.y, performance.now()); if (t) return showPreview(t.power, t.yaw, t.x0); }
+  else if (charging) return showPreview(meterPower(chargeT), aimYaw, L.origin[0]);
+  hidePreview();
+  if (swipe) { held.visible = true; held.position.set(CONFIG.swipe.followFinger ? counterX(swipe.x0, swipe.y0) : L.origin[0], L.origin[1], L.origin[2]); held.quaternion.copy(camera.quaternion); } // finger down, not yet a throw
+}
+
+// ----------------------------------------------------------------------------------------- main loop
+let bulbMesh = null;
+function buildBulbs() {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff }), geo = new THREE.BoxGeometry(1, 1, 1);
+  const make = (list, parent) => {
+    const m = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((b, i) => { m.setMatrixAt(i, _m4.compose(_p.set(b.x, b.y, b.z), _q.identity(), _s.setScalar(b.size))); m.setColorAt(i, _col.set(b.color).multiplyScalar(2.4)); });
+    m.frustumCulled = false; parent.add(m); return m;
+  };
+  bulbMesh = make(bulbs, scene); make(hang, valance);
+}
+let last = performance.now(), time = 0, slowT = 0, fpsAvg = 60;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const raw = (now - last) / 1000; last = now; const dt = Math.min(0.05, raw);
+  // automatic quality fallback
+  if (raw > 0 && raw < 0.5) { fpsAvg += (1 / raw - fpsAvg) * 0.04; if (qMode === 'auto' && fpsAvg < CONFIG.quality.autoMinFps && time > 2.5) { if ((slowT += raw) > 1.5 && qLevel !== 'low') { qLevel = QLEVELS[QLEVELS.indexOf(qLevel) + 1]; slowT = 0; fpsAvg = 60; applyQuality(); } } else slowT = 0; }
+  update(dt);
+  composer.render(dt);
+}
+function update(dt) {
+  time += dt;
+  cooldown -= dt;
+  if (state === 'play') {
+    timeLeft -= dt;
+    const sec = Math.max(0, Math.ceil(timeLeft));
+    if (sec !== lastTick) { el.timer.textContent = sec; const urgent = timeLeft <= CONFIG.round.urgentSeconds; el.timer.classList.toggle('urgent', urgent); if (urgent && sec > 0) sfx.tick(); lastTick = sec; }
+    if (timeLeft <= 0) endRound();
+  } else if (state === 'ending' && (overT -= dt) <= 0) showOver();
+  updateKeyboard(dt); updatePreview(); updateBalls(dt, time); updateClowns(dt, time); updateParticles(dt, time);
+  // gentle bulb flicker
+  const F = CONFIG.effects.flicker;
+  for (const o of pts) o.l.intensity = o.base * (1 + o.flick * F * (Math.sin(time * 9 + o.ph) + 0.6 * Math.sin(time * 23 + o.ph * 3)));
+  if (bulbMesh) bulbMesh.material.color.setScalar(1 + F * 0.8 * Math.sin(time * 11) + F * 0.5 * Math.sin(time * 27));
+}
+
+// ----------------------------------------------------------------------------------------- boot
+(async () => {
+  await makeSign(); buildBulbs(); applyQuality(); meterMarks();
+  $('#how').textContent = COARSE ? 'Drag up and let go to throw. Drag farther to throw farther; tilt the drag left or right to steer.' : 'Drag up with the mouse and let go to throw — or aim with the arrow keys and hold SPACE to charge.';
+  if (new URLSearchParams(location.search).has('from')) for (const id of ['#back', '#back2']) { $(id).style.display = ''; $(id).addEventListener('click', () => (location.href = '../' + (location.hash ? '?' + location.hash.slice(1) : ''))); }
+  $('#loading').remove(); $('#start').classList.add('on'); shownAt = performance.now();
+  window.__dtc = { get minSwipePower() { return minSwipePower; }, composer, dof, bloom, renderer, scene, step: (dt = 1 / 60) => update(dt), render: () => composer.render(0.016), CONFIG, simulate, throwBall, tryThrow, clowns, rows, balls, startRound, camera, get state() { return state; }, get score() { return score; }, get timeLeft() { return timeLeft; }, set timeLeft(v) { timeLeft = v; }, get fps() { return fpsAvg; }, get quality() { return qLevel; } };
+  requestAnimationFrame(frame);
+})().catch((e) => { console.error(e); $('#loading').textContent = 'Something went wrong: ' + e.message; });
+</script>
+</body>
+</html>
